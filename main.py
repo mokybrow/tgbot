@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 import requests
 
 import platform
+
 platform.python_version()
 
 load_dotenv()
@@ -135,7 +136,6 @@ def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global a, s, schdl2, url, answer, dt_current, names_dict, studying_days
 
-
     await update.message.reply_text("Hello", reply_markup=markup)
     return CHOOSING
 
@@ -214,7 +214,6 @@ async def registration(update: Update, context: ContextTypes.DEFAULT_TYPE):  # �
         build_menu(button_list, n_cols=1))  # n_cols = 1 is for single column and mutliple rows
     groups = []
 
-
     await update.message.reply_text(
         "Здравствуйте, первичная регистрация занесёт вас в базу пользователей.\n\nВыберете свой институт:",
         reply_markup=reply_markup)
@@ -283,7 +282,7 @@ async def last_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(chat_id)
 
     await query.edit_message_text(
-            text="Группа установлена")
+        text="Группа установлена")
 
     return CHOOSING
 
