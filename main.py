@@ -19,6 +19,17 @@ import requests
 
 import platform
 
+import psycopg2
+from psycopg2 import OperationalError
+
+connection = psycopg2.connect(
+    database="users",
+    user="postgres",
+    password="admin",
+    host="127.0.0.1",
+    port="5432",
+)
+
 platform.python_version()
 
 load_dotenv()
@@ -31,7 +42,7 @@ logging.basicConfig(
 global a, s, schdl2, url, dt_current, names_dict, studying_days, groups, urls_dict, btn_lable
 
 # Клавиатура
-reply_keyboard = [["Расписание на сегодня", "Выбрать день", 'Выбрать группу/изменить'], ['Регистрация']]
+reply_keyboard = [["Расписание на сегодня", "Выбрать день", 'Выбрать группу/изменить']]
 markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
 url = 'https://online.i-klgtu.ru/fulltime/current/10/' + quote(f'20-ИЭ-2.html')
@@ -135,6 +146,28 @@ def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global a, s, schdl2, url, answer, dt_current, names_dict, studying_days
+    chat_id = update.message.chat_id
+    name_usr = update.message.chat.first_name
+    # print(chat_id, name_usr)
+
+    cursor = connection.cursor()
+    select_users = "SELECT * FROM users"
+    cursor.execute(select_users)
+    result = cursor.fetchall()
+
+    abc = [item for item in result if item[0] == chat_id]
+    print(abc)
+    if abc:
+        print('Yes')
+    else:
+        print('Noy')
+
+        users = [(chat_id, name_usr, " ")]
+        user_records = ", ".join(["%s"] * len(users))
+        insert_query = (f"INSERT INTO users (id, NAME, sgroup) VALUES {user_records}")
+        cursor = connection.cursor()
+        cursor.execute(insert_query, users)
+        connection.commit()
 
     await update.message.reply_text("Hello", reply_markup=markup)
     return CHOOSING
@@ -244,7 +277,7 @@ async def groupe_maker(update: Update, context: ContextTypes.DEFAULT_TYPE):  # �
     global a, s, schdl2, url, dt_current, names_dict, studying_days, groups, urls_dict, new_url, btn_lable
     query = update.callback_query
     last_url = new_url + '/' + quote(f'{query.data}') + '.html'
-
+    chat_id = query.message.chat_id
     req = urllib.request.Request(url=last_url)
     f = urllib.request.urlopen(req)
     xhtml = f.read().decode('utf-8')
@@ -264,8 +297,28 @@ async def groupe_maker(update: Update, context: ContextTypes.DEFAULT_TYPE):  # �
             text="Выберите подгруппу", reply_markup=reply_markup
         )
     else:
-        chat_id = query.message.chat_id
-        print(chat_id)
+        data = update.callback_query.data
+
+        update_post_description = f"""
+        UPDATE
+          users
+        SET
+          sgroup = '{data}'
+        WHERE
+          id = {chat_id}
+        """
+
+        def execute_query(connection, query):
+
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query)
+                print("Query executed successfully")
+            except OperationalError as e:
+                print(f"The error '{e}' occurred")
+
+        execute_query(connection, update_post_description)
+        connection.commit()
         await query.edit_message_text(
             text="Группа установлена")
         return CHOOSING
@@ -279,7 +332,29 @@ async def last_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
 
     chat_id = query.message.chat_id
-    print(chat_id)
+    print(chat_id, update.callback_query.data)
+    data = update.callback_query.data
+
+    update_post_description = f"""
+    UPDATE
+      users
+    SET
+      sgroup = '{data}'
+    WHERE
+      id = {chat_id}
+    """
+
+    def execute_query(connection, query):
+
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query)
+            print("Query executed successfully")
+        except OperationalError as e:
+            print(f"The error '{e}' occurred")
+
+    execute_query(connection, update_post_description)
+    connection.commit()
 
     await query.edit_message_text(
         text="Группа установлена")
