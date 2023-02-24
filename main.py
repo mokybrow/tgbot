@@ -42,10 +42,10 @@ logging.basicConfig(
 global a, s, schdl2, url, dt_current, names_dict, studying_days, groups, urls_dict, btn_lable
 
 # Клавиатура
-reply_keyboard = [["Расписание на сегодня", "Выбрать день", 'Выбрать группу/изменить']]
+reply_keyboard = [['Выбрать группу/изменить'],["Расписание на сегодня", "Выбрать день", ]]
 markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
-url = 'https://online.i-klgtu.ru/fulltime/current/10/' + quote(f'20-ИЭ-2.html')
+url = 'https://online.i-klgtu.ru/fulltime/current/10/' + quote(f'20-ИЭ-1.html')
 
 names_dict = {}
 studying_days = []
@@ -156,38 +156,186 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = cursor.fetchall()
 
     abc = [item for item in result if item[0] == chat_id]
-    print(abc)
-    if abc:
-        print('Yes')
-    else:
-        print('Noy')
-
-        users = [(chat_id, name_usr, " ")]
+    if not abc:
+        users = [(chat_id, name_usr, " ", 0)]
         user_records = ", ".join(["%s"] * len(users))
-        insert_query = (f"INSERT INTO users (id, NAME, sgroup) VALUES {user_records}")
+        insert_query = (f"INSERT INTO users (id, NAME, sgroup, podgroup) VALUES {user_records}")
         cursor = connection.cursor()
         cursor.execute(insert_query, users)
         connection.commit()
+
+
 
     await update.message.reply_text("Hello", reply_markup=markup)
     return CHOOSING
 
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global a, s, schdl2, url, dt_current, names_dict, studying_days
+    global a, s, schdl2, url, names_dict, studying_days
 
     """Parses the CallbackQuery and updates the message text."""
     query = update.callback_query
     dt_current = query.data[0:10]
-    pacer()
 
-    await query.answer()
-    if names_dict:
-        await query.edit_message_text(text=f"Расписание на: {query.data}" + '\n\n' + '\n'.join(
-            "{}. {}".format(k, v) for k, v in names_dict.items()))
+    chat_id = query.message.chat_id
+
+    cursor = connection.cursor()
+    select_users = f"SELECT * FROM users WHERE id={chat_id}"
+    cursor.execute(select_users)
+    result = cursor.fetchall()
+    if result[0][2] != ' ':
+        if result[0][3] == 0:
+            names_dict = {}
+            req = urllib.request.Request(url=result[0][2])
+            f = urllib.request.urlopen(req)
+            xhtml = f.read().decode('utf-8')
+            p = HTMLTableParser()
+            p.feed(xhtml)
+            s = (p.tables[0])
+
+            # print(s)
+
+            def search_matrix(matrix, word):
+                for i, row in enumerate(matrix):
+                    for j, text in enumerate(row):
+                        z = text.find(word)
+                        if z == -1:
+                            continue
+                        return i, j, z
+                return -1, -1, -1
+
+            a = search_matrix(s, dt_current)
+            b = [a for b in s for a in b]
+            studying_days = list(filter(lambda v: match('\d\d\.\d\d\.\d{4}', v), b))
+            # print('Это Б', studying_days)
+            # Проверка на воскресенье
+            if a != (-1, -1, -1):
+                schdl = [i for i in s[int(a[0]):int(a[0]) + 12]]
+                schdl2 = schdl[::2]
+                count = 0
+                firsts = [x[1] + ' ' + x[2] + ' ауд.' for x in schdl2]
+                firsts[0] = schdl2[0][2] + ' ' + schdl2[0][3] + ' ауд.'
+
+                names_dict = {}
+                for i, name in enumerate(firsts, 1):
+                    names_dict[i] = name
+
+                names_dict = {key: val for key, val in names_dict.items() if val != '  ауд.'}
+                for i in range(len(firsts)):
+                    if firsts[i] == '':
+                        count += 1
+
+            if names_dict:
+                await query.edit_message_text(text=f"Расписание на: {query.data}" + '\n\n' + '\n'.join(
+                    "{}. {}".format(k, v) for k, v in names_dict.items()))
+            else:
+                await query.edit_message_text(text=f"В этот день пар нет")
+
+        elif result[0][3] == 1:
+
+            names_dict = {}
+            req = urllib.request.Request(url=result[0][2])
+            f = urllib.request.urlopen(req)
+            xhtml = f.read().decode('utf-8')
+            p = HTMLTableParser()
+            p.feed(xhtml)
+            s = (p.tables[0])
+
+            # print(s)
+
+            def search_matrix(matrix, word):
+                for i, row in enumerate(matrix):
+                    for j, text in enumerate(row):
+                        z = text.find(word)
+                        if z == -1:
+                            continue
+                        return i, j, z
+                return -1, -1, -1
+
+            a = search_matrix(s, dt_current)
+            b = [a for b in s for a in b]
+            studying_days = list(filter(lambda v: match('\d\d\.\d\d\.\d{4}', v), b))
+            # print('Это Б', studying_days)
+            # Проверка на воскресенье
+            if a != (-1, -1, -1):
+                schdl = [i for i in s[int(a[0]):int(a[0]) + 12]]
+                schdl2 = schdl[::2]
+                count = 0
+                firsts = [x[1] + ' ' + x[2] + ' ауд.' for x in schdl2]
+                firsts[0] = schdl2[0][2] + ' ' + schdl2[0][3] + ' ауд.'
+
+                names_dict = {}
+                for i, name in enumerate(firsts, 1):
+                    names_dict[i] = name
+
+                names_dict = {key: val for key, val in names_dict.items() if val != '  ауд.'}
+                for i in range(len(firsts)):
+                    if firsts[i] == '':
+                        count += 1
+
+            if names_dict:
+                await query.edit_message_text(text=f"Расписание на: {query.data}" + '\n\n' + '\n'.join(
+                    "{}. {}".format(k, v) for k, v in names_dict.items()))
+            else:
+                await query.edit_message_text(text=f"В этот день пар нет")
+
+        elif result[0][3] == 2:
+
+            names_dict = {}
+            req = urllib.request.Request(url=result[0][2])
+            f = urllib.request.urlopen(req)
+            xhtml = f.read().decode('utf-8')
+            p = HTMLTableParser()
+            p.feed(xhtml)
+            s = (p.tables[0])
+
+            # print(s)
+
+            def search_matrix(matrix, word):
+                for i, row in enumerate(matrix):
+                    for j, text in enumerate(row):
+                        z = text.find(word)
+                        if z == -1:
+                            continue
+                        return i, j, z
+                return -1, -1, -1
+
+            a = search_matrix(s, dt_current)
+            b = [a for b in s for a in b]
+            studying_days = list(filter(lambda v: match('\d\d\.\d\d\.\d{4}', v), b))
+            # print('Это Б', studying_days)
+            # Проверка на воскресенье
+            if a != (-1, -1, -1):
+                schdl = [i for i in s[int(a[0]):int(a[0]) + 12]]
+                schdl2 = schdl[::2]
+                count = 0
+
+                firsts = [x[3] + ' '+ x[4] + ' ауд.' for x in schdl2]
+                firsts[0] = schdl2[0][4] + ' ' + schdl2[0][5] + ' ауд.'
+
+
+                for x in schdl2:
+                    if len(x) == 5 and x[2] != '':
+                        firsts[schdl2.index(x)] = x[1] + " " + x[2] + ' ' + ' ауд.'
+
+
+
+                names_dict = {}
+                for i, name in enumerate(firsts, 1):
+                    names_dict[i] = name
+
+                names_dict = {key: val for key, val in names_dict.items() if val != '  ауд.'}
+                for i in range(len(firsts)):
+                    if firsts[i] == '':
+                        count += 1
+
+            if names_dict:
+                await query.edit_message_text(text=f"Расписание на: {query.data}" + '\n\n' + '\n'.join(
+                    "{}. {}".format(k, v) for k, v in names_dict.items()))
+            else:
+                await query.edit_message_text(text=f"В этот день пар нет")
     else:
-        await query.edit_message_text(text=f"В этот день пар нет")
-
+        await query.edit_message_text(text=f"Сначала выберете группу!")
 
 async def choose_schedule(update: Update,
                           context: ContextTypes.DEFAULT_TYPE):  # Функция выбора расписания на текущих неделях
@@ -196,6 +344,7 @@ async def choose_schedule(update: Update,
     tz_klgd = pytz.timezone("Europe/Kaliningrad")
     dt_obj = datetime.datetime.now(tz_klgd)
     dt_current = dt_obj.strftime("%d.%m.%Y")
+
     pacer()
     button_list = []
     for each in studying_days:
@@ -207,19 +356,173 @@ async def choose_schedule(update: Update,
 
 
 async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):  # Функция расписания на текущий день
-    global a, s, schdl2, url, dt_current, names_dict, studying_days
+    global a, s, schdl2, dt_current, names_dict, studying_days
 
     tz_klgd = pytz.timezone("Europe/Kaliningrad")
     dt_obj = datetime.datetime.now(tz_klgd)
     dt_current = dt_obj.strftime("%d.%m.%Y")
-    pacer()
 
-    if names_dict:
-        await update.message.reply_text(text=f"Расписание на:" + '\n\n' + '\n'.join(
-            "{}. {}".format(k, v) for k, v in names_dict.items()))
+    # pacer()
+
+    chat_id = update.message.chat_id
+
+    cursor = connection.cursor()
+    select_users = f"SELECT * FROM users WHERE id={chat_id}"
+    cursor.execute(select_users)
+    result = cursor.fetchall()
+    if result[0][2]!=' ':
+        if result[0][3] == 0:
+            names_dict = {}
+            req = urllib.request.Request(url=result[0][2])
+            f = urllib.request.urlopen(req)
+            xhtml = f.read().decode('utf-8')
+            p = HTMLTableParser()
+            p.feed(xhtml)
+            s = (p.tables[0])
+
+            def search_matrix(matrix, word):
+                for i, row in enumerate(matrix):
+                    for j, text in enumerate(row):
+                        z = text.find(word)
+                        if z == -1:
+                            continue
+                        return i, j, z
+                return -1, -1, -1
+
+            a = search_matrix(s, dt_current)
+            b = [a for b in s for a in b]
+            studying_days = list(filter(lambda v: match('\d\d\.\d\d\.\d{4}', v), b))
+            # print('Это Б', studying_days)
+            # Проверка на воскресенье
+            if a != (-1, -1, -1):
+                schdl = [i for i in s[int(a[0]):int(a[0]) + 12]]
+                schdl2 = schdl[::2]
+                count = 0
+                firsts = [x[1] + ' ' + x[2] + ' ауд.' for x in schdl2]
+                firsts[0] = schdl2[0][2] + ' ' + schdl2[0][3] + ' ауд.'
+
+                names_dict = {}
+                for i, name in enumerate(firsts, 1):
+                    names_dict[i] = name
+
+                names_dict = {key: val for key, val in names_dict.items() if val != '  ауд.'}
+                for i in range(len(firsts)):
+                    if firsts[i] == '':
+                        count += 1
+
+            if names_dict:
+                await update.message.reply_text(text=f"Расписание на: {dt_current}" + '\n\n' + '\n'.join(
+                    "{}. {}".format(k, v) for k, v in names_dict.items()))
+            else:
+                await update.message.reply_text(text=f"Сегодня пар нет")
+
+        elif result[0][3] == 1:
+
+            names_dict = {}
+            req = urllib.request.Request(url=result[0][2])
+            f = urllib.request.urlopen(req)
+            xhtml = f.read().decode('utf-8')
+            p = HTMLTableParser()
+            p.feed(xhtml)
+            s = (p.tables[0])
+
+            # print(s)
+
+            def search_matrix(matrix, word):
+                for i, row in enumerate(matrix):
+                    for j, text in enumerate(row):
+                        z = text.find(word)
+                        if z == -1:
+                            continue
+                        return i, j, z
+                return -1, -1, -1
+
+            a = search_matrix(s, dt_current)
+            b = [a for b in s for a in b]
+            studying_days = list(filter(lambda v: match('\d\d\.\d\d\.\d{4}', v), b))
+            # print('Это Б', studying_days)
+            # Проверка на воскресенье
+            if a != (-1, -1, -1):
+                schdl = [i for i in s[int(a[0]):int(a[0]) + 12]]
+                schdl2 = schdl[::2]
+                count = 0
+                firsts = [x[1] + ' ' + x[2] + ' ауд.' for x in schdl2]
+                firsts[0] = schdl2[0][2] + ' ' + schdl2[0][3] + ' ауд.'
+
+                names_dict = {}
+                for i, name in enumerate(firsts, 1):
+                    names_dict[i] = name
+
+                names_dict = {key: val for key, val in names_dict.items() if val != '  ауд.'}
+                for i in range(len(firsts)):
+                    if firsts[i] == '':
+                        count += 1
+
+            if names_dict:
+                await update.message.reply_text(text=f"Расписание на: {dt_current}" + '\n\n' + '\n'.join(
+                    "{}. {}".format(k, v) for k, v in names_dict.items()))
+            else:
+                await update.message.reply_text(text=f"Сегодня пар нет")
+
+        elif result[0][3] == 2:
+
+            names_dict = {}
+            req = urllib.request.Request(url=result[0][2])
+            f = urllib.request.urlopen(req)
+            xhtml = f.read().decode('utf-8')
+            p = HTMLTableParser()
+            p.feed(xhtml)
+            s = (p.tables[0])
+
+            # print(s)
+
+            def search_matrix(matrix, word):
+                for i, row in enumerate(matrix):
+                    for j, text in enumerate(row):
+                        z = text.find(word)
+                        if z == -1:
+                            continue
+                        return i, j, z
+                return -1, -1, -1
+
+            a = search_matrix(s, dt_current)
+            b = [a for b in s for a in b]
+            studying_days = list(filter(lambda v: match('\d\d\.\d\d\.\d{4}', v), b))
+            # print('Это Б', studying_days)
+            # Проверка на воскресенье
+            if a != (-1, -1, -1):
+                schdl = [i for i in s[int(a[0]):int(a[0]) + 12]]
+                # print(schdl)
+                schdl2 = schdl[::2]
+                # print('Скедул 2', schdl2)
+                count = 0
+
+                firsts = [x[3] + ' '+ x[4] + ' ауд.' for x in schdl2]
+                firsts[0] = schdl2[0][4] + ' ' + schdl2[0][5] + ' ауд.'
+
+
+                for x in schdl2:
+                    if len(x) == 5 and x[2] != '':
+                        firsts[schdl2.index(x)] = x[1] + " " + x[2] + ' ' + ' ауд.'
+
+                # print('Второй список', firsts)
+                names_dict = {}
+                for i, name in enumerate(firsts, 1):
+                    names_dict[i] = name
+
+                names_dict = {key: val for key, val in names_dict.items() if val != '  ауд.'}
+                # print(names_dict)
+                for i in range(len(firsts)):
+                    if firsts[i] == '':
+                        count += 1
+
+            if names_dict:
+                await update.message.reply_text(text=f"Расписание на: {dt_current}" + '\n\n' + '\n'.join(
+                    "{}. {}".format(k, v) for k, v in names_dict.items()))
+            else:
+                await update.message.reply_text(text=f"Сегодня пар нет")
     else:
-        await update.message.reply_text(text=f"Сегодня пар нет")
-
+        await update.message.reply_text(text=f"Сначала выберете группу!")
 
 async def choose_group(update: Update, context: ContextTypes.DEFAULT_TYPE):  # Функция выбора группы
     global a, s, schdl2, url, dt_current, names_dict, studying_days, groups
@@ -259,7 +562,6 @@ async def inst_maker(update: Update, context: ContextTypes.DEFAULT_TYPE):  # Ф�
 
     query = update.callback_query
     new_url = 'http://online.i-klgtu.ru/fulltime/current/' + quote(f'{urls_dict[query.data]}')
-
     # print(new_url)
     btn_lst()
     button_list = []
@@ -274,7 +576,7 @@ async def inst_maker(update: Update, context: ContextTypes.DEFAULT_TYPE):  # Ф�
 
 
 async def groupe_maker(update: Update, context: ContextTypes.DEFAULT_TYPE):  # Функция выбора группы
-    global a, s, schdl2, url, dt_current, names_dict, studying_days, groups, urls_dict, new_url, btn_lable
+    global a, s, schdl2, url, dt_current, names_dict, studying_days, groups, urls_dict, new_url, btn_lable, last_url
     query = update.callback_query
     last_url = new_url + '/' + quote(f'{query.data}') + '.html'
     chat_id = query.message.chat_id
@@ -303,21 +605,30 @@ async def groupe_maker(update: Update, context: ContextTypes.DEFAULT_TYPE):  # �
         UPDATE
           users
         SET
-          sgroup = '{data}'
+          sgroup = '{last_url}'
         WHERE
           id = {chat_id}
         """
+
+        update_gp_description = f"""
+                UPDATE
+                  users
+                SET
+                  podgroup = 0
+                WHERE
+                  id = {chat_id}
+                """
 
         def execute_query(connection, query):
 
             cursor = connection.cursor()
             try:
                 cursor.execute(query)
-                print("Query executed successfully")
             except OperationalError as e:
                 print(f"The error '{e}' occurred")
 
         execute_query(connection, update_post_description)
+        execute_query(connection, update_gp_description)
         connection.commit()
         await query.edit_message_text(
             text="Группа установлена")
@@ -327,33 +638,42 @@ async def groupe_maker(update: Update, context: ContextTypes.DEFAULT_TYPE):  # �
 
 
 async def last_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:  # Функция выбора группы
-    global a, s, schdl2, url, dt_current, names_dict, studying_days, groups, urls_dict, new_url, btn_lable
+    global a, s, schdl2, url, dt_current, names_dict, studying_days, groups, urls_dict, new_url, btn_lable, last_url
 
     query = update.callback_query
 
     chat_id = query.message.chat_id
-    print(chat_id, update.callback_query.data)
     data = update.callback_query.data
 
     update_post_description = f"""
     UPDATE
       users
     SET
-      sgroup = '{data}'
+      sgroup = '{last_url}'
+
     WHERE
       id = {chat_id}
     """
+
+    update_pdgr_description = f"""
+        UPDATE
+          users
+        SET
+          podgroup = {data[-1]}
+        WHERE
+          id = {chat_id}
+        """
 
     def execute_query(connection, query):
 
         cursor = connection.cursor()
         try:
             cursor.execute(query)
-            print("Query executed successfully")
         except OperationalError as e:
             print(f"The error '{e}' occurred")
 
     execute_query(connection, update_post_description)
+    execute_query(connection, update_pdgr_description)
     connection.commit()
 
     await query.edit_message_text(
