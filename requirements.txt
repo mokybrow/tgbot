@@ -1,7 +1,7 @@
-beautifulsoup4==4.4.1
-html-table-parser==0.1.0
-html-table-parser-python3==0.3.1
-html5lib==1.1
+beautifulsoup4
+html-table-parser
+html-table-parser-python3
+html5lib
 pyTelegramBotAPI==4.9.0
 requests==2.28.1
 schedule==1.1.0
